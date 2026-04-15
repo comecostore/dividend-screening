@@ -553,8 +553,8 @@ const CHARTS = [
     id: 2,
     title: '④ 営業CF',
     type: 'bar',
-    note: '全年度黒字',
-    rl: '基準 0',
+    note: '過去10年で一度でも赤字→リスト対象外',
+    rl: '基準 0（一度でも赤字→×）',
     k:'ocf', u:'百万円', verdictKey:'ocf',
     refLine: {val:0, label:'基準 0', color:'rgba(231,76,60,0.7)'},
     getYears: d=>d.cf_years, getVals: d=>d.ocf,
@@ -836,7 +836,13 @@ function show(code){
   // バッジ（8項目全部）
   const sec=SECTOR[code]||'不明';
   let b=`<span class="badge sbadge ${scl}">${sc}/8</span><span class="badge" style="background:#FFF3CD;color:#856404">${sec}</span>`;
-  BADGE_ITEMS.forEach(c=>{const v=gj(c.k,d);b+=`<span class="badge ${v===true?'bp':v===false?'bf':'bn'}">${c.lb} ${v===true?'○':v===false?'×':'－'}</span>`;});
+  BADGE_ITEMS.forEach(c=>{
+    const v=gj(c.k,d);
+    let lbl;
+    if(c.k==='ocf'&&v===false) lbl='④ 営業CF ⚠リスト対象外';
+    else lbl=`${c.lb} ${v===true?'○':v===false?'×':'－'}`;
+    b+=`<span class="badge ${v===true?'bp':v===false?'bf':'bn'}">${lbl}</span>`;
+  });
   document.getElementById('ibg').innerHTML=b;
 
   // 財務データ一覧テーブル
