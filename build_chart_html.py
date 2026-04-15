@@ -60,7 +60,9 @@ def fetch_sector(code):
     except:
         return None
 
-def check_trend(lst):
+def check_trend(lst, min_ratio=None):
+    if min_ratio is None:
+        min_ratio = TREND_MIN_RATIO
     vals = [v for v in lst if v is not None]
     if len(vals) < 2: return None
     for i in range(1, len(vals)):
@@ -68,7 +70,7 @@ def check_trend(lst):
         if prev == 0:
             if curr <= 0: return False
             continue
-        if curr < prev * TREND_MIN_RATIO: return False
+        if curr < prev * min_ratio: return False
     return True
 
 def no_cut(lst):
@@ -290,7 +292,7 @@ def build_entry(code, name, yld, res, bs_cash, div):
     verdicts = {
         'sales':     check_trend(sales),
         'op_margin': pass_om,
-        'eps':       check_trend(eps),
+        'eps':       check_trend(eps, min_ratio=1.0),
         'ocf':       pass_ocf,
         'div':       pass_div,
         'payout':    pass_po,
@@ -901,4 +903,4 @@ html = HTML.replace('{data_json}', json.dumps(all_data, ensure_ascii=False)) \
 with open(out, 'w', encoding='utf-8') as f:
     f.write(html)
 print(f'HTML生成: {out}  ({len(all_data)}銘柄)')
-webbrowser.open('file:///' + out.replace('\\','/'))
+webbrowser.open('file:///' + str(out).replace('\\','/'))
