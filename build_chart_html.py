@@ -479,6 +479,15 @@ header h1{font-size:1.2rem;font-weight:900}
 .vn{background:#FFEB9C;color:#7d6608}
 .cw{position:relative;height:195px}
 .rl{font-size:0.7rem;color:#999;margin-top:5px}
+#ftbl th{background:#1F3864;color:#fff;padding:8px 12px;text-align:right;font-size:0.8rem;font-weight:700;white-space:nowrap}
+#ftbl th:first-child{text-align:left}
+#ftbl td{padding:7px 12px;text-align:right;border-bottom:1px solid #f0f0f0;white-space:nowrap}
+#ftbl td:first-child{text-align:left;font-weight:700;color:#444}
+#ftbl tr:hover td{background:#f5f8ff}
+#ftbl tr.hl-row td{background:#EEF2F7}
+.fc-up{color:#276221;font-weight:700}
+.fc-dn{color:#843C0C;font-weight:700}
+.fc-eq{color:#555}
 </style>
 </head>
 <body>
@@ -495,6 +504,12 @@ header h1{font-size:1.2rem;font-weight:900}
 </header>
 <div id="ib"><span id="it">銘柄コードまたは銘柄名を入力してください</span><div id="ilinks"></div><div id="ibg"></div></div>
 <div class="grid" id="grid"></div>
+<div id="ftbl-wrap" style="display:none;padding:20px">
+  <div style="font-weight:900;font-size:0.95rem;color:#1F3864;margin-bottom:8px">📋 財務データ一覧</div>
+  <div style="overflow-x:auto">
+    <table id="ftbl" style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.07);overflow:hidden"></table>
+  </div>
+</div>
 
 <script>
 const D = {data_json};
@@ -824,6 +839,9 @@ function show(code){
   BADGE_ITEMS.forEach(c=>{const v=gj(c.k,d);b+=`<span class="badge ${v===true?'bp':v===false?'bf':'bn'}">${c.lb} ${v===true?'○':v===false?'×':'－'}</span>`;});
   document.getElementById('ibg').innerHTML=b;
 
+  // 財務データ一覧テーブル
+  buildFtbl(d);
+
   // グリッド（6チャート）
   const g=document.getElementById('grid'); g.innerHTML='';
   // 既存チャートを破棄
@@ -868,6 +886,67 @@ function show(code){
       CI[i]=buildSingleChart('c'+i, cfg, d);
     }
   });
+}
+
+function buildFtbl(d){
+  const wrap=document.getElementById('ftbl-wrap');
+  const tbl=document.getElementById('ftbl');
+  // 年度を結合（sales/ocf/div/payout/equity/cash の各年を統合）
+  const allYears=new Set([
+    ...(d.years||[]),
+    ...(d.cf_years||[]),
+    ...(d.div_years||[]),
+    ...(d.payout_years||[]),
+    ...(d.eq_years||[]),
+    ...(d.cash_years||[])
+  ]);
+  const yrList=[...allYears].sort().reverse();
+  if(!yrList.length){wrap.style.display='none';return;}
+
+  // 年→値のマップ作成
+  function mkMap(yrs,vals){const m={};(yrs||[]).forEach((y,i)=>{m[y]=vals[i];});return m;}
+  const mSales=mkMap(d.years,d.sales);
+  const mOm=mkMap(d.years,d.op_margin);
+  const mEps=mkMap(d.years,d.eps);
+  const mOcf=mkMap(d.cf_years,d.ocf);
+  const mDiv=mkMap(d.div_years,d.div);
+  const mPo=mkMap(d.payout_years,d.payout);
+  const mEq=mkMap(d.eq_years,d.equity);
+
+  function fc(val,prev,fmt){
+    if(val==null)return '<td>－</td>';
+    const s=fmt(val);
+    if(prev==null)return `<td class="fc-eq">${s}</td>`;
+    if(val>prev)return `<td class="fc-up">${s}</td>`;
+    if(val<prev)return `<td class="fc-dn">${s}</td>`;
+    return `<td class="fc-eq">${s}</td>`;
+  }
+  function fmtN(v){return v!=null?Number(v).toLocaleString():'－';}
+  function fmtP(v){return v!=null?v.toFixed(1)+'%':'－';}
+  function fmtDiv(v){return v!=null?v+'円':'－';}
+
+  let html='<thead><tr>'
+    +'<th>年度</th><th>売上高（百万）</th><th>営業利益率</th><th>EPS</th>'
+    +'<th>営業CF（百万）</th><th>1株配当</th><th>配当性向</th><th>自己資本比率</th>'
+    +'</tr></thead><tbody>';
+
+  yrList.forEach((yr,idx)=>{
+    const nextYr=yrList[idx+1]; // 1つ古い年
+    const rowCls=idx%2===1?' class="hl-row"':'';
+    const label=yr.replace('/','年').replace(/\/.*/,'');
+    html+=`<tr${rowCls}><td>${label}</td>`
+      +fc(mSales[yr],mSales[nextYr],v=>Number(v).toLocaleString())
+      +fc(mOm[yr],mOm[nextYr],v=>v.toFixed(1)+'%')
+      +fc(mEps[yr],mEps[nextYr],v=>v.toFixed(2)+'円')
+      +fc(mOcf[yr],mOcf[nextYr],v=>Number(v).toLocaleString())
+      +fc(mDiv[yr],mDiv[nextYr],v=>v+'円')
+      +fc(mPo[yr],mPo[nextYr],v=>v.toFixed(2)+'%')
+      +fc(mEq[yr],mEq[nextYr],v=>v.toFixed(1)+'%')
+      +'</tr>';
+  });
+  html+='</tbody>';
+  tbl.innerHTML=html;
+  wrap.style.display='block';
 }
 
 const ci2=document.getElementById('ci'),al=document.getElementById('al');
