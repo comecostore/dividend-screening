@@ -1,0 +1,35 @@
+name: 毎日データ更新
+
+on:
+  schedule:
+    - cron: '0 17 * * *'  # 毎日 JST 2:00（UTC 17:00）
+  workflow_dispatch:        # 手動実行ボタンも有効
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 依存ライブラリをインストール
+        run: pip install -r requirements.txt
+
+      - name: データ更新・HTML生成
+        run: python build_chart_html.py
+
+      - name: 更新ファイルをコミット＆プッシュ
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add chart_viewer.html chart_data_cache.json sector_cache.json
+          git diff --staged --quiet || git commit -m "データ自動更新 $(date +'%Y-%m-%d')"
+          git push
