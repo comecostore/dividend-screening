@@ -956,6 +956,7 @@ function buildFtbl(d){
   const mDiv=mkMap(d.div_years,d.div);
   const mPo=mkMap(d.payout_years,d.payout);
   const mEq=mkMap(d.eq_years,d.equity);
+  const mCash=mkMap(d.cash_years,d.cash);
 
   function fc(val,prev,fmt){
     if(val==null)return '<td>－</td>';
@@ -971,7 +972,7 @@ function buildFtbl(d){
 
   let html='<thead><tr>'
     +'<th>年度</th><th>売上高（百万）</th><th>営業利益率</th><th>EPS</th>'
-    +'<th>営業CF（百万）</th><th>1株配当</th><th>配当性向</th><th>自己資本比率</th>'
+    +'<th>営業CF（百万）</th><th>1株配当</th><th>配当性向</th><th>自己資本比率</th><th>現金等（百万）</th>'
     +'</tr></thead><tbody>';
 
   yrList.forEach((yr,idx)=>{
@@ -986,6 +987,7 @@ function buildFtbl(d){
       +fc(mDiv[yr],mDiv[nextYr],v=>v+'円')
       +fc(mPo[yr],mPo[nextYr],v=>v.toFixed(2)+'%')
       +fc(mEq[yr],mEq[nextYr],v=>v.toFixed(1)+'%')
+      +fc(mCash[yr],mCash[nextYr],v=>Number(v).toLocaleString())
       +'</tr>';
   });
   html+='</tbody>';
