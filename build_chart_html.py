@@ -940,7 +940,6 @@ function buildFtbl(d){
   const allYears=new Set([
     ...(d.years||[]),
     ...(d.cf_years||[]),
-    ...(d.div_years||[]),
     ...(d.payout_years||[]),
     ...(d.eq_years||[]),
     ...(d.cash_years||[])
