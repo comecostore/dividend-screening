@@ -42,23 +42,41 @@ def yr_label(cell_text):
     m = re.search(r'(\d{4})[/年](\d{1,2})', cell_text)
     return f"{m.group(1)}/{int(m.group(2)):02d}" if m else None
 
-# ── irbank 業種取得 ───────────────────────────────────
-def fetch_sector(code):
-    """IRBankの企業ページのパンくずから業種を取得"""
+# ── irbank メインページ取得（業種・決算発表日を一括取得） ──
+def fetch_irbank_main(code):
+    """IRBankの企業ページから業種と次回決算発表日を取得"""
     try:
         r = requests.get(f'https://irbank.net/{code}',
                          headers=HEADERS, timeout=15)
         soup = BeautifulSoup(r.content, 'html.parser')
+
+        # 業種（パンくずから）
+        sector = None
         for nav in soup.find_all(['nav', 'ol', 'ul']):
             anchors = nav.find_all('a')
             for i, a in enumerate(anchors):
-                txt = a.get_text(strip=True)
-                if 'ホーム' in txt:
+                if 'ホーム' in a.get_text(strip=True):
                     if i + 1 < len(anchors):
-                        return anchors[i + 1].get_text(strip=True)
-        return None
+                        sector = anchors[i + 1].get_text(strip=True)
+                        break
+            if sector:
+                break
+
+        # 次回決算発表日（/market/kessan?y=YYYY-MM-DD リンクから）
+        earnings_date = None
+        for a in soup.find_all('a', href=True):
+            m = re.search(r'/market/kessan\?y=(\d{4}-\d{2}-\d{2})', a['href'])
+            if m:
+                earnings_date = m.group(1)
+                break
+
+        return sector, earnings_date
     except:
-        return None
+        return None, None
+
+def fetch_sector(code):
+    sector, _ = fetch_irbank_main(code)
+    return sector
 
 def check_trend(lst, min_ratio=None):
     if min_ratio is None:
@@ -372,9 +390,11 @@ with open(cache_path, 'w', encoding='utf-8') as f:
     json.dump(all_data, f, ensure_ascii=False)
 print(f'\nキャッシュ保存: {len(all_data)}銘柄')
 
-# ── 業種キャッシュ ────────────────────────────────────
+# ── 業種・決算発表日キャッシュ ───────────────────────
 from collections import defaultdict
 sector_cache_path = BASE_DIR / 'sector_cache.json'
+earnings_date_cache_path = BASE_DIR / 'earnings_date_cache.json'
+
 if os.path.exists(sector_cache_path):
     with open(sector_cache_path, encoding='utf-8') as f:
         sector_cache = json.load(f)
@@ -382,26 +402,42 @@ if os.path.exists(sector_cache_path):
 else:
     sector_cache = {}
 
-sector_new = 0
+if os.path.exists(earnings_date_cache_path):
+    with open(earnings_date_cache_path, encoding='utf-8') as f:
+        earnings_date_cache = json.load(f)
+    print(f'決算日キャッシュ: {len(earnings_date_cache)}件')
+else:
+    earnings_date_cache = {}
+
+info_new = 0
 all_codes = list(all_data.keys())
 for i, code in enumerate(all_codes, 1):
-    if code in sector_cache:
+    need_sector = code not in sector_cache
+    need_date   = code not in earnings_date_cache
+    if not need_sector and not need_date:
         continue
-    sector = fetch_sector(code)
-    sector_cache[code] = sector or '不明'
-    sector_new += 1
-    print(f'  業種取得 [{i}/{len(all_codes)}] {code} → {sector_cache[code]}')
+    sector, earnings_date = fetch_irbank_main(code)
+    if need_sector:
+        sector_cache[code] = sector or '不明'
+    if need_date:
+        earnings_date_cache[code] = earnings_date
+    info_new += 1
+    print(f'  情報取得 [{i}/{len(all_codes)}] {code} → {sector_cache.get(code,"不明")} / {earnings_date_cache.get(code,"－")}')
     time.sleep(0.5)
-    if sector_new % 30 == 0:
+    if info_new % 30 == 0:
         with open(sector_cache_path, 'w', encoding='utf-8') as f:
             json.dump(sector_cache, f, ensure_ascii=False)
+        with open(earnings_date_cache_path, 'w', encoding='utf-8') as f:
+            json.dump(earnings_date_cache, f, ensure_ascii=False)
 
 with open(sector_cache_path, 'w', encoding='utf-8') as f:
     json.dump(sector_cache, f, ensure_ascii=False)
-if sector_new:
-    print(f'業種取得完了: {sector_new}件')
+with open(earnings_date_cache_path, 'w', encoding='utf-8') as f:
+    json.dump(earnings_date_cache, f, ensure_ascii=False)
+if info_new:
+    print(f'情報取得完了: {info_new}件')
 else:
-    print('業種キャッシュ: 全件キャッシュ済み')
+    print('キャッシュ: 全件済み')
 
 # ── 業種別 営業利益率 平均を計算 ──────────────────────
 sector_om = defaultdict(lambda: defaultdict(list))
@@ -515,6 +551,7 @@ header h1{font-size:1.2rem;font-weight:900}
 const D = {data_json};
 const SECTOR = {sector_json};
 const SECTOR_AVG = {sector_avg_json};
+const ED = {earnings_date_json};
 
 // バッジ表示用（8項目全部）
 const BADGE_ITEMS = [
@@ -825,7 +862,9 @@ function show(code){
   const d=D[code]; if(!d)return;
   const sc=Object.values(d.verdicts).filter(v=>v===true).length;
   const scl=sc>=8?'s8':sc>=7?'s7':sc>=6?'s6':'s5';
-  document.getElementById('it').textContent=`【${code}】${d.name}　配当利回り: ${d.yield}%`;
+  const ed=ED[code];
+  const edStr=ed?`　📅 次回決算: ${ed}`:'';
+  document.getElementById('it').textContent=`【${code}】${d.name}　配当利回り: ${d.yield}%${edStr}`;
   document.getElementById('it').style.color='';
   document.getElementById('ilinks').innerHTML=
     `<a class="ext-link lk-ir" href="https://irbank.net/${code}" target="_blank">📊 IRバンク</a>`+
@@ -984,7 +1023,8 @@ out = BASE_DIR / 'chart_viewer.html'
 html = HTML.replace('{data_json}', json.dumps(all_data, ensure_ascii=False)) \
            .replace('{total}', str(len(all_data))) \
            .replace('{sector_json}', json.dumps(sector_cache, ensure_ascii=False)) \
-           .replace('{sector_avg_json}', json.dumps(sector_avg, ensure_ascii=False))
+           .replace('{sector_avg_json}', json.dumps(sector_avg, ensure_ascii=False)) \
+           .replace('{earnings_date_json}', json.dumps(earnings_date_cache, ensure_ascii=False))
 with open(out, 'w', encoding='utf-8') as f:
     f.write(html)
 print(f'HTML生成: {out}  ({len(all_data)}銘柄)')
